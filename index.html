@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cockpit Tuner</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#050505">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tuner">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<style>
+:root{--cream:#efe3a8;--yel:#f0c93c;--red:#ff4a2e;--org:#ff8a2a;--teal:#5ad1c5;--grn:#4cff9a;--wht:#ece8e0;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+html,body{margin:0;background:#050505;color:var(--cream);font-family:Bahnschrift,"DIN Alternate","Arial Narrow",system-ui,sans-serif}
+.deck{max-width:430px;margin:0 auto;padding:14px 14px 20px;display:flex;flex-direction:column;gap:12px;min-height:100%}
+.pill{border:2px solid var(--cream);border-radius:12px;box-shadow:0 0 8px rgba(239,227,168,.25)}
+.level{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--grn);font-size:11px;letter-spacing:.24em}
+.ticks{display:flex;gap:3px;align-items:flex-end;height:18px}
+.ticks i{width:6px;background:var(--grn);opacity:.18;transition:opacity .08s}
+.ticks i.on{opacity:1;box-shadow:0 0 6px var(--grn)}
+.bar{padding:12px;text-align:center;font-size:14px;letter-spacing:.05em;min-height:56px;display:flex;align-items:center;justify-content:center}
+.bar.err{color:var(--org);border-color:var(--org)}
+.mid{display:grid;grid-template-columns:58px 1fr 58px;gap:10px;align-items:start}
+.col{display:flex;flex-direction:column;gap:12px}
+.k{aspect-ratio:1;border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#141414;font-weight:700;font-size:20px;line-height:1;opacity:.35;transition:all .15s;background:var(--c)}
+.k svg{width:22px;height:22px;margin-bottom:3px;fill:currentColor}
+.k small{font-size:9px;font-weight:400;letter-spacing:.05em;margin-top:2px}
+.k.hit{opacity:1;box-shadow:0 0 14px var(--c)}
+.tuned .k.hit{box-shadow:0 0 0 3px var(--grn),0 0 16px var(--grn)}
+.leds{display:flex;gap:6px;margin-top:2px}
+.leds i{width:10px;height:10px;background:var(--c);opacity:.25;transition:opacity .15s}
+.leds i.on{opacity:1;box-shadow:0 0 8px var(--c)}
+#tr{display:block;width:100%;aspect-ratio:240/200}
+#wf{filter:drop-shadow(0 0 3px rgba(240,201,60,.65))}
+#rl line{stroke:var(--red);stroke-width:3;filter:drop-shadow(0 0 4px var(--red))}
+#rl{opacity:.3;transition:transform .09s linear,opacity .2s}
+.live #rl{opacity:1}
+.tuned #rl line{stroke:var(--grn);filter:drop-shadow(0 0 5px var(--grn))}
+.ro{margin-top:10px;padding:8px;text-align:center;font:700 22px ui-monospace,Menlo,monospace;letter-spacing:.18em;color:var(--red);text-shadow:0 0 8px rgba(255,74,46,.6)}
+.radar{overflow:hidden;background:#050505}
+.radar svg{display:block;width:100%;aspect-ratio:300/110}
+.ar{fill:var(--org);opacity:.18;transition:opacity .1s}
+.flat #aL,.sharp #aR{opacity:1;filter:drop-shadow(0 0 5px var(--org))}
+.tuned .radar line{stroke:var(--grn)}
+#note{font:700 58px Bahnschrift,"Arial Narrow",system-ui,sans-serif;letter-spacing:2px;fill:var(--org);paint-order:stroke;stroke:#050505;stroke-width:8px;stroke-linejoin:round;opacity:.5}
+.live #note{opacity:1}
+.tuned #note{fill:var(--grn)}
+#cents{font:14px Bahnschrift,"Arial Narrow",system-ui,sans-serif;letter-spacing:2px;fill:var(--cream);paint-order:stroke;stroke:#050505;stroke-width:5px}
+.lb{fill:var(--cream);font:11px Bahnschrift,"Arial Narrow",system-ui,sans-serif;letter-spacing:3px;opacity:.7}
+.go{font:inherit;font-size:18px;letter-spacing:.2em;color:var(--cream);background:transparent;padding:15px;cursor:pointer}
+.go:hover{background:rgba(239,227,168,.1)}
+.go:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="deck" id="deck">
+  <div class="level"><div class="ticks" id="ticks"></div><span>SIGNAL</span></div>
+  <div class="bar pill" id="bar">Press start, allow the microphone, then pluck a string.</div>
+
+  <div class="mid">
+    <div class="col" id="colL"><div class="leds"><i style="--c:#f0c93c" id="ledY"></i><i style="--c:#4a8dff"></i><i style="--c:#4cff9a" id="ledG"></i></div></div>
+    <div>
+      <svg id="tr" viewBox="0 0 240 200" role="img" aria-label="Tuning gauge">
+        <defs><clipPath id="sc"><rect x="4" y="4" width="232" height="192" rx="14"/></clipPath></defs>
+        <rect x="2" y="2" width="236" height="196" rx="16" fill="#151515" stroke="#2c2c2c" stroke-width="3"/>
+        <rect x="4" y="4" width="232" height="192" rx="14" fill="#0a0904"/>
+        <g clip-path="url(#sc)">
+          <g id="wf" fill="none" stroke="#f0c93c" stroke-width="2" stroke-linejoin="round"></g>
+          <g id="rl"><line x1="114" y1="10" x2="114" y2="190"/><line x1="126" y1="10" x2="126" y2="190"/></g>
+          <g fill="none" stroke="#efe3a8" stroke-width="1.5" opacity=".9"><circle cx="120" cy="100" r="9"/><path d="M120 84v8M120 108v8M104 100h8M128 100h8"/></g>
+        </g>
+      </svg>
+      <div class="ro pill" id="ro">000.0</div>
+    </div>
+    <div class="col" id="colR"></div>
+  </div>
+
+  <div class="radar pill">
+    <svg viewBox="0 0 300 110" role="img" aria-label="Note display">
+      <circle cx="228" cy="62" r="64" fill="none" stroke="#1d4a2e" stroke-width="2"/>
+      <line x1="0" y1="55" x2="300" y2="55" stroke="#ff4a2e" stroke-width="2"/>
+      <line x1="150" y1="0" x2="150" y2="110" stroke="#ff4a2e" stroke-width="2"/>
+      <g id="aL" class="ar"><polygon points="24,38 50,55 24,72"/><polygon points="54,38 80,55 54,72"/></g>
+      <g id="aR" class="ar"><polygon points="276,38 250,55 276,72"/><polygon points="246,38 220,55 246,72"/></g>
+      <text class="lb" x="10" y="16">FLAT</text><text class="lb" x="290" y="16" text-anchor="end">SHARP</text>
+      <text id="note" x="150" y="76" text-anchor="middle">--</text>
+      <text id="cents" x="150" y="102" text-anchor="middle"></text>
+    </svg>
+  </div>
+
+  <button class="go pill" id="go">Start tuner</button>
+</main>
+
+<script>
+(function(){
+  var NAMES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  var STRINGS=[["E",82.41,"#5ad1c5"],["A",110.0,"#e8452c"],["D",146.83,"#ece8e0"],["G",196.0,"#5ad1c5"],["B",246.94,"#e8452c"],["E",329.63,"#ece8e0"]];
+  var ROT=[0,90,180,270,0,180];
+  var $=function(id){return document.getElementById(id)};
+  var NS="http://www.w3.org/2000/svg";
+  var deck=$("deck"),noteEl=$("note"),centsEl=$("cents"),ro=$("ro"),rl=$("rl"),bar=$("bar"),go=$("go"),wf=$("wf");
+  var calm=window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+  // String buttons: three low strings left, three high strings right
+  var strEls=STRINGS.map(function(s,i){
+    var d=document.createElement("div");d.className="k";d.style.setProperty("--c",s[2]);
+    d.innerHTML='<svg viewBox="0 0 24 24" style="transform:rotate('+ROT[i]+'deg)"><path d="M12 3a9 9 0 0 0 0 18z"/><rect x="14" y="10.5" width="8" height="3"/></svg>'+s[0]+"<small>"+s[1].toFixed(0)+"</small>";
+    $(i<3?"colL":"colR").insertBefore(d,i<3?$("colL").lastChild:null);
+    return d;
+  });
+  var colL=$("colL"),leds=colL.querySelector(".leds");colL.appendChild(leds);
+
+  // Signal meter
+  var tk=[];for(var q=0;q<16;q++){var t=document.createElement("i");t.style.height=(5+q*.85)+"px";$("ticks").appendChild(t);tk.push(t)}
+  function meter(l){var n=Math.round(Math.min(1,Math.sqrt(l)*2.2)*16);tk.forEach(function(e,i){e.classList.toggle("on",i<n)})}
+
+  // Trench wireframe
+  var O={a:14,b:16,c:226,d:184},I={a:102,b:86,c:138,d:114};
+  function L(x1,y1,x2,y2){var l=document.createElementNS(NS,"line");l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2);l.setAttribute("y2",y2);wf.appendChild(l)}
+  function R(){var r=document.createElementNS(NS,"rect");wf.appendChild(r);return r}
+  [0,.25,.5,.75,1].forEach(function(f){
+    L(O.a+(O.c-O.a)*f,O.b,I.a+(I.c-I.a)*f,I.b);L(O.a+(O.c-O.a)*f,O.d,I.a+(I.c-I.a)*f,I.d);
+  });
+  [.25,.5,.75].forEach(function(f){
+    L(O.a,O.b+(O.d-O.b)*f,I.a,I.b+(I.d-I.b)*f);L(O.c,O.b+(O.d-O.b)*f,I.c,I.b+(I.d-I.b)*f);
+  });
+  var outer=R(),inner=R(),rings=[],NR=7,phase=0,spd=0;
+  function box(r,u){
+    r.setAttribute("x",O.a+(I.a-O.a)*u);r.setAttribute("y",O.b+(I.b-O.b)*u);
+    r.setAttribute("width",(O.c-O.a)+((I.c-I.a)-(O.c-O.a))*u);r.setAttribute("height",(O.d-O.b)+((I.d-I.b)-(O.d-O.b))*u);
+  }
+  box(outer,0);box(inner,1);
+  for(var k=0;k<NR;k++)rings.push(R());
+  function place(){for(var k=0;k<NR;k++){var qq=(k/NR+phase)%1;box(rings[k],1-Math.pow(qq,2.2))}}
+  place();
+  function anim(){if(spd>0){phase=(phase+spd)%1;place()}requestAnimationFrame(anim)}
+  if(!calm)requestAnimationFrame(anim);
+
+  // Audio
+  var ctx,analyser,buf,stream,running=false,smooth=null,lastHeard=0,lvl=0,W=2048;
+
+  function detect(data,sr){
+    var rms=0,i;
+    for(i=0;i<W;i++)rms+=data[i]*data[i];
+    lvl=Math.sqrt(rms/W);
+    if(lvl<0.008)return -1;
+    var tauMin=Math.floor(sr/1000),tauMax=Math.min(Math.floor(sr/60),data.length-W-1);
+    var d=new Float32Array(tauMax+1),tau,sum;
+    for(tau=1;tau<=tauMax;tau++){sum=0;for(i=0;i<W;i++){var x=data[i]-data[i+tau];sum+=x*x}d[tau]=sum}
+    var run=0,cm=new Float32Array(tauMax+1);cm[0]=1;
+    for(tau=1;tau<=tauMax;tau++){run+=d[tau];cm[tau]=run?d[tau]*tau/run:1}
+    var found=-1;
+    for(tau=tauMin;tau<tauMax;tau++){
+      if(cm[tau]<0.15){while(tau+1<tauMax&&cm[tau+1]<cm[tau])tau++;found=tau;break}
+    }
+    if(found<0)return -1;
+    var a=cm[found-1],b=cm[found],c=cm[found+1],den=a-2*b+c;
+    return sr/(found+(den?0.5*(a-c)/den:0));
+  }
+
+  function setBar(t,err){bar.textContent=t;bar.classList.toggle("err",!!err)}
+  function place2(c){rl.style.transform="translate("+(c*2)+"px,0)"}
+
+  function showIdle(){
+    deck.classList.remove("live","tuned","flat","sharp");spd=0;
+    noteEl.textContent="--";centsEl.textContent="";ro.textContent="000.0";place2(0);
+    $("ledY").classList.remove("on");
+    strEls.forEach(function(e){e.classList.remove("hit")});
+  }
+
+  function render(f){
+    var midi=69+12*Math.log2(f/440),r=Math.round(midi),cents=(midi-r)*100;
+    smooth=smooth===null?cents:smooth+(cents-smooth)*0.35;
+    if(Math.abs(cents-smooth)>30)smooth=cents;
+    var name=NAMES[((r%12)+12)%12],oct=Math.floor(r/12)-1;
+    noteEl.innerHTML=name+'<tspan font-size="24" dy="-24">'+oct+"</tspan>";
+    ro.textContent=("0000"+f.toFixed(1)).slice(-6);
+    place2(Math.max(-50,Math.min(50,smooth)));
+    var tuned=Math.abs(smooth)<=4;
+    deck.classList.add("live");deck.classList.toggle("tuned",tuned);
+    deck.classList.toggle("flat",smooth<-4);deck.classList.toggle("sharp",smooth>4);
+    spd=(tuned&&!calm)?0.006:0;
+    centsEl.textContent=tuned?"LOCKED":(smooth<0?"FLAT ":"SHARP ")+Math.abs(Math.round(smooth));
+    $("ledY").classList.add("on");
+    var best=-1,bd=1e9;
+    STRINGS.forEach(function(s,i){var dd=Math.abs(1200*Math.log2(f/s[1]));if(dd<bd){bd=dd;best=i}});
+    strEls.forEach(function(e,i){e.classList.toggle("hit",i===best&&bd<250)});
+  }
+
+  function loop(){
+    if(!running)return;
+    analyser.getFloatTimeDomainData(buf);
+    var f=detect(buf,ctx.sampleRate),now=performance.now();
+    meter(lvl);
+    if(f>0){lastHeard=now;render(f)}
+    else if(now-lastHeard>700){smooth=null;showIdle()}
+    requestAnimationFrame(loop);
+  }
+
+  function stop(){
+    running=false;
+    if(stream)stream.getTracks().forEach(function(t){t.stop()});
+    if(ctx)ctx.close();
+    $("ledG").classList.remove("on");meter(0);go.textContent="Start tuner";setBar("Tuner off.");showIdle();
+  }
+
+  async function start(){
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    }catch(e){
+      setBar("Microphone blocked. Allow microphone access for this site in your browser settings, then try again.",true);
+      return;
+    }
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    if(ctx.state==="suspended")await ctx.resume();
+    var src=ctx.createMediaStreamSource(stream);
+    analyser=ctx.createAnalyser();analyser.fftSize=4096;src.connect(analyser);
+    buf=new Float32Array(analyser.fftSize);
+    running=true;smooth=null;lastHeard=performance.now();
+    $("ledG").classList.add("on");go.textContent="Stop tuner";setBar("Pluck one string at a time.");
+    showIdle();loop();
+  }
+
+  go.addEventListener("click",function(){running?stop():start()});
+  showIdle();
+})();
+</script>
+<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js")})}</script>
+</body>
+</html>
